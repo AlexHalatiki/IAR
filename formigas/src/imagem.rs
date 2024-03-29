@@ -23,7 +23,7 @@ impl Imagem {
             13 => Rgb([255, 192, 203]), // Rosa
             14 => Rgb([128, 128, 0]),   // Oliva
             15 => Rgb([0, 128, 128]),   // Turquesa
-            _ => Rgb([255, 255, 255]),        // Preto para qualquer outro valor
+            _ => Rgb([255, 255, 255]),  // Branco para qualquer outro valor
         }
     }
 
