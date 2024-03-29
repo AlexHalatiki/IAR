@@ -1,166 +1,166 @@
+use rand::Rng;
 use std::{cell::RefCell, rc::Rc};
 
-use rand::Rng;
+use crate::{dado::Dado, ALFA, HEIGHT, K1, K2, RAIO_DE_VISAO, WIDTH};
 
 pub struct Formiga {
-    raio_de_visao: i32,
     pub posicao_x: i32,
     pub posicao_y: i32,
-    pub estado: bool,
+    pub estado: Option<Dado>,
 }
 
 impl Formiga {
-    pub fn new(raio_de_visao: i32, posicao_x: i32, posicao_y: i32) -> Self {
+    pub fn new(posicao_x: i32, posicao_y: i32) -> Self {
         Self {
-            raio_de_visao: raio_de_visao,
             posicao_x: posicao_x,
             posicao_y: posicao_y,
-            estado: false,
+            estado: None,
         }
     }
 
     pub fn iteracao(
         &mut self,
-        ambiente: &mut Vec<Vec<(bool, Option<Rc<RefCell<Formiga>>>)>>,
-        width: i32,
-        height: i32,
+        ambiente: &mut Vec<Vec<(Option<Dado>, Option<Rc<RefCell<Formiga>>>)>>,
     ) {
-        let (corpo, _) = ambiente[self.posicao_x as usize][self.posicao_y as usize];
+        let dado = ambiente[self.posicao_x as usize][self.posicao_y as usize]
+            .0
+            .clone();
 
-        if !self.estado && corpo {
-            self.pegar(ambiente, width, height);
+        if self.estado.is_none() && dado.is_some() {
+            let similaridade = self.similaridade_dados(ambiente, dado.as_ref().unwrap());
+            self.pegar(ambiente, similaridade);
         }
 
-        if self.estado && !corpo {
-            self.soltar(ambiente, width, height);
+        if self.estado.is_some() && dado.is_none() {
+            let similaridade = self.similaridade_dados(ambiente, self.estado.as_ref().unwrap());
+            self.soltar(ambiente, similaridade);
         }
 
-        self.andar(ambiente, width, height);
+        self.andar(ambiente);
     }
 
-    fn porcentagem_soltar(
+    fn similaridade_dados(
         &self,
-        ambiente: &mut Vec<Vec<(bool, Option<Rc<RefCell<Formiga>>>)>>,
-        width: i32,
-        height: i32,
+        ambiente: &mut Vec<Vec<(Option<Dado>, Option<Rc<RefCell<Formiga>>>)>>,
+        dado: &Dado,
     ) -> f64 {
-        let mut itens_redor: i32 = 0;
+        let celulas_redor: i32 = (RAIO_DE_VISAO * 2 + 1).pow(2) - 1;
+        let mut somatorio_distancia: f64 = 0.0;
 
-        let raio_32 = self.raio_de_visao as i32;
-
-        let celulas_redor = (raio_32 * 2 + 1).pow(2) - 1;
+        let raio_32 = RAIO_DE_VISAO as i32;
 
         for i in self.posicao_x - raio_32..=self.posicao_x + raio_32 {
             let mut indice_x = i;
 
             if i < 0 {
-                indice_x = width + i;
+                indice_x = WIDTH + i;
             }
 
-            if i >= width {
-                indice_x = i - width;
+            if i >= WIDTH {
+                indice_x = i - WIDTH;
             }
 
             for j in self.posicao_y - raio_32..=self.posicao_y + raio_32 {
+                if i == self.posicao_x && j == self.posicao_y {
+                    continue;
+                }
+
                 let mut indice_y = j;
 
                 if j < 0 {
-                    indice_y = height + j;
+                    indice_y = HEIGHT + j;
                 }
 
-                if j >= width {
-                    indice_y = j - height;
+                if j >= HEIGHT {
+                    indice_y = j - HEIGHT;
                 }
 
-                let (corpo, _) = ambiente[indice_x as usize][indice_y as usize];
+                let dado_atual = &ambiente[indice_x as usize][indice_y as usize].0;
 
-                if corpo {
-                    itens_redor += 1;
+                if dado_atual.is_some() {
+                    let dado_atual = dado_atual.as_ref().unwrap();
+                    let mut distancia: f64 = 0.0;
+
+                    for i in 0..dado.props.len() {
+                        distancia += (dado.props[i] - dado_atual.props[i]).powf(2.0);
+                    }
+
+                    distancia = distancia.sqrt();
+                    somatorio_distancia += 1.0 - distancia / ALFA;
                 }
             }
         }
 
-        itens_redor as f64 / celulas_redor as f64
+        if somatorio_distancia <= 0.0 {
+            return 0.0;
+        }
+
+        somatorio_distancia / celulas_redor as f64
     }
 
     fn pegar(
         &mut self,
-        ambiente: &mut Vec<Vec<(bool, Option<Rc<RefCell<Formiga>>>)>>,
-        width: i32,
-        height: i32,
+        ambiente: &mut Vec<Vec<(Option<Dado>, Option<Rc<RefCell<Formiga>>>)>>,
+        similaridade: f64,
     ) {
-        let porcentagem_pegar = 1.0 - self.porcentagem_soltar(ambiente, width, height);
-
-        if porcentagem_pegar == 0.0 {
-            return;
-        }
-
         let mut rng = rand::thread_rng();
 
         let numero_aleatorio: f64 = rng.gen_range(0.0..=1.0);
+
+        let porcentagem_pegar = (K1 / (K1 + similaridade)).powf(2.0);
 
         if numero_aleatorio > porcentagem_pegar {
             return;
         }
 
-        self.estado = true;
+        self.estado = ambiente[self.posicao_x as usize][self.posicao_y as usize].0.clone();
 
-        ambiente[self.posicao_x as usize][self.posicao_y as usize].0 = false;
+        ambiente[self.posicao_x as usize][self.posicao_y as usize].0 = None;
     }
 
     fn soltar(
         &mut self,
-        ambiente: &mut Vec<Vec<(bool, Option<Rc<RefCell<Formiga>>>)>>,
-        width: i32,
-        height: i32,
+        ambiente: &mut Vec<Vec<(Option<Dado>, Option<Rc<RefCell<Formiga>>>)>>,
+        similaridade: f64,
     ) {
-        let porcentagem_soltar = self.porcentagem_soltar(ambiente, width, height);
-
-        if porcentagem_soltar == 0.0 {
-            return;
-        }
-
         let mut rng = rand::thread_rng();
 
         let numero_aleatorio: f64 = rng.gen_range(0.0..=1.0);
+
+        let porcentagem_soltar = (similaridade / (K2 + similaridade)).powf(2.0);
 
         if numero_aleatorio > porcentagem_soltar {
             return;
         }
 
-        self.estado = false;
+        ambiente[self.posicao_x as usize][self.posicao_y as usize].0 = self.estado.clone();
 
-        ambiente[self.posicao_x as usize][self.posicao_y as usize].0 = true;
+        self.estado = None;
     }
 
-    fn andar(
-        &mut self,
-        ambiente: &mut Vec<Vec<(bool, Option<Rc<RefCell<Formiga>>>)>>,
-        width: i32,
-        height: i32,
-    ) {
+    fn andar(&mut self, ambiente: &mut Vec<Vec<(Option<Dado>, Option<Rc<RefCell<Formiga>>>)>>) {
         let mut sem_formiga: Vec<(i32, i32)> = Vec::new();
 
         for i in self.posicao_x - 1..=self.posicao_x + 1 {
             let mut indice_x = i;
 
             if i < 0 {
-                indice_x = width + i;
+                indice_x = WIDTH + i;
             }
 
-            if i >= width {
-                indice_x = i - width;
+            if i >= WIDTH {
+                indice_x = i - WIDTH;
             }
 
             for j in self.posicao_y - 1..=self.posicao_y + 1 {
                 let mut indice_y = j;
 
                 if j < 0 {
-                    indice_y = height + j;
+                    indice_y = HEIGHT + j;
                 }
 
-                if j >= width {
-                    indice_y = j - height;
+                if j >= HEIGHT {
+                    indice_y = j - HEIGHT;
                 }
 
                 let formiga = &ambiente[indice_x as usize][indice_y as usize].1;
@@ -179,7 +179,7 @@ impl Formiga {
 
         let (x, y) = sem_formiga[rng.gen_range(0..sem_formiga.len())];
 
-        let (corpo, _) = ambiente[x as usize][y as usize];
+        let corpo = ambiente[x as usize][y as usize].0.clone();
 
         let (corpo_atual, formiga_atual) =
             ambiente[self.posicao_x as usize][self.posicao_y as usize].clone();
