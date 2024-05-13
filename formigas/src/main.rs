@@ -15,11 +15,12 @@ use std::{
 
 const WIDTH: i32 = 60;
 const HEIGHT: i32 = 60;
-const NUM_FORMIGAS: i32 = 10;
-const RAIO_DE_VISAO: i32 = 1;
-const ALFA: f64 = 0.97;
-const K1: f64 = 0.35;
-const K2: f64 = 0.65;
+const NUM_FORMIGAS: i32 = 150;
+const RAIO_DE_VISAO: i32 = 2;
+const ALFA: f64 = 0.9;
+const K1: f64 = 0.4;
+const K2: f64 = 0.7;
+const ITERACOES: i32 = 100000000;
 const ARQUIVO: &str = "600itens.txt";
 
 fn main() {
@@ -78,6 +79,8 @@ fn main() {
         indice_linha += 1;
     }
 
+    Imagem::salvar_matriz(&ambiente, "../data/inicio.png");
+
     for _ in 0..NUM_FORMIGAS {
         loop {
             let posicao_x = rng.gen_range(0..WIDTH);
@@ -97,9 +100,8 @@ fn main() {
         }
     }
 
-    Imagem::salvar_matriz(&ambiente, "../data/inicio.png");
 
-    for _ in 0..100000000 {
+    for _ in 0..ITERACOES {
         for i in 0..NUM_FORMIGAS {
             let mut formiga = formigas[i as usize].borrow_mut();
             formiga.iteracao(&mut ambiente);
